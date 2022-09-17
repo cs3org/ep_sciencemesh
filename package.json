@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/waridrox/ep_sciencemesh.git"
+    "url": "https://github.com/cs3org/ep_sciencemesh.git"
   },
   "keywords": [
     "etherpad",
@@ -20,9 +20,9 @@
   "author": "waridrox",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/waridrox/ep_sciencemesh.git/issues"
+    "url": "https://github.com/cs3org/ep_sciencemesh.git/issues"
   },
-  "homepage": "https://github.com/waridrox/ep_sciencemesh#readme",
+  "homepage": "https://github.com/cs3org/ep_sciencemesh#readme",
   "dependencies": {
     "axios": "^0.27.2",
     "body-parser": "^1.20.0",
