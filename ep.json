@@ -1,0 +1,17 @@
+{
+  "parts": [
+    {
+      "name": "main",
+      "client_hooks": {
+        "handleClientMessage_CUSTOM": "ep_sciencemesh/static/js/index.js:handleClientMessage_CUSTOM"
+      },
+      "hooks": {
+        "expressConfigure": "ep_sciencemesh/index.js:setEFSSMetadata",
+        "userJoin": "ep_sciencemesh/index.js:userJoin",
+        "padUpdate": "ep_sciencemesh/index.js:padUpdate",
+        "userLeave": "ep_sciencemesh/index.js:userLeave",
+        "eejsBlock_modals": "ep_sciencemesh/index.js:eejsBlock_modals"
+      }
+    }
+  ]
+}
