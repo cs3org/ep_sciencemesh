@@ -1,26 +1,26 @@
 {
-  "name": "ep_sciencemesh",
-  "version": "0.0.19",
-  "description": "Etherpad plugin to support collaborative sharing leveraging cs3 wopi server.",
+  "name": "@cs3org/ep_sciencemesh",
+  "version": "v0.1.1",
+  "description": "A plugin to integrate the Etherpad-lite ecosystem to CS3 storages powered by Reva and WOPI",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "bump": "npm version"
+    "test": "none"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/cs3org/ep_sciencemesh.git"
+    "url": "git+https://github.com/cs3org/ep_sciencemesh.git"
   },
   "keywords": [
     "etherpad",
-    "plugin",
-    "sciencemesh",
-    "cern"
+    "cloud",
+    "storage",
+    "cs3",
+    "sciencemesh"
   ],
-  "author": "waridrox",
+  "author": "cs3org",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/cs3org/ep_sciencemesh.git/issues"
+    "url": "https://github.com/cs3org/ep_sciencemesh/issues"
   },
   "homepage": "https://github.com/cs3org/ep_sciencemesh#readme",
   "dependencies": {
