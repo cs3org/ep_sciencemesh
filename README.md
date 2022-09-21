@@ -9,9 +9,9 @@ A plugin to integrate the [Etherpad-lite](https://github.com/ether/etherpad-lite
 
 In an already existing etherpad project base directory, run
 
-    npm i @cs3org/ep_sciencemesh
+    npm i ep_sciencemesh
 
-Restart your etherpad-lite instance to recognize the plugin.
+Restart your etherpad-lite instance to load the plugin.
 
-To install etherpad, refer [here](https://github.com/ether/etherpad-lite#installation).
+To install etherpad, refer to [this documentation](https://github.com/ether/etherpad-lite#installation).
 
