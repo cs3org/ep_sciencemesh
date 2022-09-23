@@ -6,11 +6,8 @@ trigger:
   branch:
   - main
   event:
-    exclude:
-    - pull_request
+    include:
     - tag
-    - promote
-    - rollback
 
 steps:
 - name: Update the package version
