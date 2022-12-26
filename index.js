@@ -204,7 +204,7 @@ exports.userLeave = function(hookName, session, callback) {
       if (metadata !== null) {
         const [wopiHost, wopiSrc, accessToken] = metadata;
         await wopiCall(wopiHost, wopiSrc, accessToken, session.padId, true);
-        dbInterface.removeUser(session.padId, session.author);
+        dbInterface.removeAuthor(session.padId, session.author);
 
         resolve(console.log(`Exited author content removed successfully from db`));
       }

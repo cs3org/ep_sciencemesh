@@ -32,7 +32,14 @@ const dbMutex = new mutex.Mutex();
 function addMetadataToPad(padId, metadata) {
   const release = await dbMutex.acquire();
   try {
-    await db.set(`efssmetadata:${padId}`, metadata);
+    const md = await db.get(`efssmetadata:${padId}`);
+    if (md) {
+      // append another metadata payload
+      await db.set(`efssmetadata:${padId}`, md + '_' + metadata);
+    } else {
+      // first metadata payload for this pad
+      await db.set(`efssmetadata:${padId}`, metadata);
+    }
   }
   finally {
     release();
@@ -43,16 +50,20 @@ function addMetadataToPad(padId, metadata) {
 function setAuthorForPad(padId, authorId) {
   const release = await dbMutex.acquire();
   try {
-    const dbkey = `efssmetadata:${padId}`;
-    const dbval = await db.get(dbkey);
+    const pendingmd = await db.get(`efssmetadata:${padId}`);
+    if (pendingmd == null) {
+      throw new Error("No outstanding metadata available to set a new author");
+    }
 
-    if (dbval) {
-      await db.set(`${dbkey}:${authorId}`, dbval);
-      console.log(`Pad author metadata set successfully in db`);
-      await db.remove(dbkey);
+    if (pendingmd.indexOf('_') > 0) {
+      // get first metadata payload for this author and keep the rest
+      await db.set(`efssmetadata:${padId}:${authorId}`, pendingmd.substring(0, pendingmd.indexOf('_')));
+      await db.set(`efssmetadata:${padId}`, pendingmd.substring(pendingmd.indexOf('_')+1));
     }
     else {
-      throw new Error("Author data doesn\'t exist");
+      // we found a single payload, use it and drop pending key
+      await db.set(`efssmetadata:${padId}:${authorId}`, pendingmd);
+      await db.remove(`efssmetadata:${padId}`);
     }
   }
   finally {
@@ -69,7 +80,7 @@ function getMetadata(padId, authorId) {
 }
 
 
-function removeUser(padId, authorId) {
+function removeAuthor(padId, authorId) {
   const release = await dbMutex.acquire();
   try {
     await db.remove(`efssmetadata:${padId}:${authorId}`);
