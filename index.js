@@ -51,7 +51,7 @@ exports.eejsBlock_modals = (hookName, args, cb) => {
   cb();
 };
 
-const setNotificationData = (padID, message) => {
+const notifyUser = (padID, message) => {
   let padId = padID
   const msg = {
     type: 'COLLABROOM',
@@ -89,52 +89,31 @@ const getMetadata = async (context) => {
 
 
 const wopiCall = async (wopiHost, wopiSrc, accessToken, padID, close=false) => {
-  let axiosURL = `${wopiHost}/wopi/bridge/${padID}?WOPISrc=${wopiSrc}&access_token=${accessToken}`;
-  if (close === true) {
-    axiosURL += '&close=true';
-  }
-  axios.post(axiosURL, {}, {    // TODO it's more standard/elegant to pass query parameters as 2nd arg rather than in the URL
+  axios.post(`${wopiHost}/wopi/bridge/${padID}`, null, {
+    params: {
+      'WOPISrc': ${wopiSrc},
+      'access_token': ${accessToken},
+      'close': ${close}
+    },
     headers: {
       'X-EFSS-Bridged-App': 'Etherpad'
     }
   })
   .then((response) => {
-    let responseStatusText = response.statusText, responseData = response.data;
-    let notificationData = responseData;
-    if (response.status === 200) {
-      console.log(`Response ${response.status} from wopiserver: ${responseStatusText}. ${responseData.message}`);
-      notificationData.status = response.status;
-
-      setNotificationData(padID, notificationData)
-    }
     if (response.status === 202) {
-      console.log(`Response ${response.status} from wopiserver: ${responseStatusText}. Enqueued action to the request`);
+      console.log('wopiCall: enqueued action');
+    }
+    else {
+      console.log('wopiCall: saved');
+      notifyUser(padID, response.data);
     }
   })
   .catch((error) => {
+    console.log(`wopiCall: error from wopiserver ${error.statusText}: ${error.data.message}`);
+    notifyUser(padID, error.data);
+
     if (error.status === 400 || error.status === 500) {
-      let errorStatusText = error.statusText;
-
-      if (error.data.message) {
-        let errorData = error.data;
-        let notificationData = errorData;
-        notificationData.status = error.status;
-
-        console.log(`Response from wopiserver:${errorStatusText}. ${errorData.message}.`);
-        setNotificationData(padID, notificationData);
-      }
       // TODO block further edit
-    }
-    else {
-      if (error.status !== 400 && /4[0-9][0-9]/.test(error.status) && error.data.message) {
-
-        let errorData = error.data;
-        let notificationData = errorData;
-        notificationData.status = error.status;
-
-        console.log(`Error: ${errorStatusText}. ${errorData.message}.`);
-        setNotificationData(padID, notificationData);
-      }
     }
   });
 };
