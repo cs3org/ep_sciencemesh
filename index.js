@@ -1,24 +1,54 @@
+// ep_sciencemesh main module
+// A plugin to integrate with CS3 storages powered by Reva and WOPI
+//
+// Initial contribution: Mohammad Warid @waridrox
+// Maintainer: Giuseppe Lo Presti @glpatcern
+//
+// Copyright 2018-2023 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 'use strict';
 
 const fs = require('fs');
-const { URL } = require('url');
-const { debounce } = require('lodash');
-const axios = require("axios");
+const URL = require('url');
+const debounce = require('lodash');
+const axios = require('axios');
 const api = require('ep_etherpad-lite/node/db/API');
-const db = require('ep_etherpad-lite/node/db/DB');
 const absolutePaths = require('ep_etherpad-lite/node/utils/AbsolutePaths');
-const apikey = fs.readFileSync(absolutePaths.makeAbsolute('APIKEY.txt')).toString();
 const eejs = require('ep_etherpad-lite/node/eejs')
 const padMessageHandler = require('ep_etherpad-lite/node/handler/PadMessageHandler');
-const server = require('ep_etherpad-lite/node/server');
+const argv = require('ep_etherpad-lite/node/utils/Cli').argv;
+import { dbInterface } from './db_interface.js'
+
+
+// This is taken from ep_etherpad-lite/node/handler/APIHandler.js
+let apikey = null;
+const apikeyFn = absolutePaths.makeAbsolute(argv.apikey || './APIKEY.txt');
+try {
+   apikey = fs.readFileSync(apikeyFn, 'utf8');
+} catch (e) {
+  console.log(`Unable to read the API key from ${apikeyFn}: ${e}`);
+}
+
 
 exports.eejsBlock_modals = (hookName, args, cb) => {
   args.content += eejs.require('ep_sciencemesh/templates/notify.ejs');
   cb();
-};
-
-const stringifyData = (data) => {
-  return JSON.stringify(data);
 };
 
 const setNotificationData = (padID, message) => {
@@ -37,8 +67,9 @@ const setNotificationData = (padID, message) => {
   padMessageHandler.handleCustomObjectMessage(msg, false)
 }
 
+
 const getMetadata = async (context) => {
-  const metaData = await db.get(`efssmetadata:${context.pad.id}:${context.author}`).catch((err) => { console.error(JSON.stringify(err.message)) });
+  const metaData = dbInterface.getMetadata(${context.pad.id}, ${context.author});
 
   if (metaData) {
     const queryParams = metaData.split(':');
@@ -55,6 +86,7 @@ const getMetadata = async (context) => {
     return null;
   }
 };
+
 
 const wopiCall = async (wopiHost, wopiSrc, accessToken, padID, close=false) => {
   let axiosURL = `${wopiHost}/wopi/bridge/${padID}?WOPISrc=${wopiSrc}&access_token=${accessToken}`;
@@ -91,7 +123,7 @@ const wopiCall = async (wopiHost, wopiSrc, accessToken, padID, close=false) => {
         console.log(`Response from wopiserver:${errorStatusText}. ${errorData.message}.`);
         setNotificationData(padID, notificationData);
       }
-      server.exit();
+      // TODO block further edit
     }
     else {
       if (error.status !== 400 && /4[0-9][0-9]/.test(error.status) && error.data.message) {
@@ -107,6 +139,7 @@ const wopiCall = async (wopiHost, wopiSrc, accessToken, padID, close=false) => {
   });
 };
 
+
 const postToWopi = async (context) => {
   const metadata = await getMetadata(context);
 
@@ -116,16 +149,17 @@ const postToWopi = async (context) => {
   }
 };
 
+
 exports.setEFSSMetadata = async (hookName, context) => {
   context.app.post('/setEFSSMetadata', async (req, res) => {
     const query = req.query;
-    console.log("Query from wopiserver: ", stringifyData(query));
+    console.log("Query from wopiserver: ", JSON.stringify(query));
 
     let isApiKeyValid = true, isPadIdValid = false;
     if (query.apikey !== apikey) {
       isApiKeyValid = false;
       console.error('Supplied API key is invalid, apikey should be', apikey);
-      res.status(400).send(stringifyData({code:1,message:"API key is invalid"}));
+      res.status(400).send(JSON.stringify({code:1,message:"API key is invalid"}));
     }
     else {
       const revisionCount = await api.getRevisionsCount(query.padID).catch((err) => { if (err.name === 'apierror') return null; });
@@ -133,15 +167,15 @@ exports.setEFSSMetadata = async (hookName, context) => {
 
       if (isPadIdValid && isApiKeyValid) {
         if ((!query.padID|| !query.wopiSrc || !query.accessToken || !query.apikey))
-          res.status(400).send(stringifyData({code:1,message:"Insufficient params or null values supplied as arguments!"}));
+          res.status(400).send(JSON.stringify({code:1,message:"Insufficient params or null values supplied as arguments!"}));
         else {
-          await db.set(`efssmetadata:${query.padID}`, `${(query.wopiSrc)}:${query.accessToken}`);
-          res.status(200).send(stringifyData({code:0,message:"Content set successfully in db"}));
+          dbInterface.addMetadataToPad(`${query.padID}`, `${(query.wopiSrc)}:${query.accessToken}`);
+          res.status(200).send(JSON.stringify({code:0,message:"Content set successfully in db"}));
         }
       }
       else {
         console.error('PadID is invalid');
-        res.status(400).send(stringifyData({code:1,message:"PadID is invalid"}));
+        res.status(400).send(JSON.stringify({code:1,message:"PadID is invalid"}));
       }
     }
   });
@@ -153,18 +187,7 @@ exports.padUpdate = debounce((hookName, context) => {
 }, 3000);
 
 exports.userJoin = async (hookName, {authorId, displayName, padId}) => {
-
-  const dbkey = `efssmetadata:${padId}`;
-  const dbval = await db.get(dbkey);
-
-  if (dbval) {
-    await db.set(`${dbkey}:${authorId}`, dbval);
-    console.log(`Pad author metadata set successfully in db`);
-    await db.remove(dbkey);
-  }
-  else {
-    throw new Error("Author data doesn\'t exist");
-  }
+  dbInterface.setAuthorForPad(padId, authorId);
 };
 
 exports.userLeave = function(hookName, session, callback) {
@@ -181,7 +204,7 @@ exports.userLeave = function(hookName, session, callback) {
       if (metadata !== null) {
         const [wopiHost, wopiSrc, accessToken] = metadata;
         await wopiCall(wopiHost, wopiSrc, accessToken, session.padId, true);
-        await db.remove(`efssmetadata:${session.padId}:${session.author}`);
+        dbInterface.removeUser(session.padId, session.author);
 
         resolve(console.log(`Exited author content removed successfully from db`));
       }
