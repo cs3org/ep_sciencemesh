@@ -23,7 +23,7 @@ const padModalShow = (message, delay, status) => {
 }
 
 exports.handleClientMessage_CUSTOM = (hook, context, cb) => {
-  if (context.payload.action === 'recieveNotificationMessage') {
+  if (context.payload.action === 'userNotification') {
 
     const message = context.payload.message;
     if (message) {

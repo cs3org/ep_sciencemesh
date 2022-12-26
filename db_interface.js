@@ -1,4 +1,4 @@
-// ep_sciencemesh db_interface.js
+// ep_sciencemesh - DB interface
 // A plugin to integrate with CS3 storages powered by Reva and WOPI
 //
 // Maintainer: Giuseppe Lo Presti @glpatcern
@@ -21,71 +21,72 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-'use strict';
+const db = require('ep_etherpad-lite/node/db/DB')
+const mutex = require('async-mutex')
 
-const db = require('ep_etherpad-lite/node/db/DB');
-const mutex = require('async-mutex');
+const dbMutex = new mutex.Mutex()
 
-const dbMutex = new mutex.Mutex();
-
-
-function addMetadataToPad(padId, metadata) {
-  const release = await dbMutex.acquire();
+function addMetadataToPad (padId, metadata) {
+  const release = dbMutex.acquire()
   try {
-    const md = await db.get(`efssmetadata:${padId}`);
-    if (md) {
-      // append another metadata payload
-      await db.set(`efssmetadata:${padId}`, md + '_' + metadata);
-    } else {
+    const md = db.get(`efssmetadata:${padId}`)
+    if (md == null) {
       // first metadata payload for this pad
-      await db.set(`efssmetadata:${padId}`, metadata);
+      db.set(`efssmetadata:${padId}`, metadata)
+    } else {
+      // append another metadata payload
+      db.set(`efssmetadata:${padId}`, md + '_' + metadata)
     }
-  }
-  finally {
-    release();
+  } finally {
+    release()
   }
 }
 
-
-function setAuthorForPad(padId, authorId) {
-  const release = await dbMutex.acquire();
+function setAuthorForPad (padId, authorId) {
+  const release = dbMutex.acquire()
   try {
-    const pendingmd = await db.get(`efssmetadata:${padId}`);
+    const pendingmd = db.get(`efssmetadata:${padId}`)
     if (pendingmd == null) {
-      throw new Error("No outstanding metadata available to set a new author");
+      // this may currently happen if a pad was created directly with Etherpad
+      // TODO need to understand what happens with this uncaught error
+      throw new Error('No outstanding metadata available to set a new author')
     }
 
     if (pendingmd.indexOf('_') > 0) {
       // get first metadata payload for this author and keep the rest
-      await db.set(`efssmetadata:${padId}:${authorId}`, pendingmd.substring(0, pendingmd.indexOf('_')));
-      await db.set(`efssmetadata:${padId}`, pendingmd.substring(pendingmd.indexOf('_')+1));
-    }
-    else {
+      db.set(`efssmetadata:${padId}:${authorId}`, pendingmd.substring(0, pendingmd.indexOf('_')))
+      db.set(`efssmetadata:${padId}`, pendingmd.substring(pendingmd.indexOf('_') + 1))
+    } else {
       // we found a single payload, use it and drop pending key
-      await db.set(`efssmetadata:${padId}:${authorId}`, pendingmd);
-      await db.remove(`efssmetadata:${padId}`);
+      db.set(`efssmetadata:${padId}:${authorId}`, pendingmd)
+      db.remove(`efssmetadata:${padId}`)
     }
-  }
-  finally {
-    release();
+  } finally {
+    release()
   }
 }
 
-
-function getMetadata(padId, authorId) {
-  const metadata = await db.get(`efssmetadata:${padId}:${authorId}`).catch((err) => {
-    console.error(JSON.stringify(err.message))
-  });
+function getMetadata (padId, authorId) {
+  // return required metadata, errors are thrown to the caller
+  const metadata = db.get(`efssmetadata:${padId}:${authorId}`)
+  if (metadata == null) {
+    throw new Error(`Metadata not found for padId = ${padId} and authorId = ${authorId}`)
+  }
   return metadata
 }
 
-
-function removeAuthor(padId, authorId) {
-  const release = await dbMutex.acquire();
+function removeAuthor (padId, authorId) {
+  // the mutex is not strictly needed here but for consistency we keep it
+  const release = dbMutex.acquire()
   try {
-    await db.remove(`efssmetadata:${padId}:${authorId}`);
-  }
-  finally {
-    release();
+    db.remove(`efssmetadata:${padId}:${authorId}`)
+  } finally {
+    release()
   }
 }
+
+
+module.exports.addMetadataToPad = addMetadataToPad
+module.exports.setAuthorForPad = setAuthorForPad
+module.exports.getMetadata = getMetadata
+module.exports.removeAuthor = removeAuthor
