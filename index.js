@@ -153,30 +153,35 @@ const postToWopi = async (context) => {
 exports.setEFSSMetadata = async (hookName, context) => {
   context.app.post('/setEFSSMetadata', async (req, res) => {
     const query = req.query;
-    console.log("Query from wopiserver: ", JSON.stringify(query));
+    console.log('Query from wopiserver:', JSON.stringify(query));
 
-    let isApiKeyValid = true, isPadIdValid = false;
     if (query.apikey !== apikey) {
-      isApiKeyValid = false;
       console.error('Supplied API key is invalid, apikey should be', apikey);
-      res.status(400).send(JSON.stringify({code:1,message:"API key is invalid"}));
+      res.status(400).send(JSON.stringify({code:1, message:"Invalid API key"}));
+      return;
+    }
+
+    if (!query.wopiSrc || !query.accessToken) {
+      res.status(400).send(JSON.stringify({code:1, message:"Missing arguments"}));
+      return;
+    }
+
+    const revisionCount = await api.getRevisionsCount(query.padID).catch((err) => {
+      if (err.name === 'apierror') return null;
+    });
+    if (revisionCount) {
+      try {
+        dbInterface.addMetadataToPad(`${query.padID}`, `${(query.wopiSrc)}:${query.accessToken}`);
+        res.status(200).send(JSON.stringify({code:0, message:"OK"}));
+      }
+      catch (err) {
+        console.error('Error setting metadata:', JSON.stringify(err));
+        res.status(500).send(JSON.stringify({code:3, message:"Error setting metadata: " + err}));
+      }
     }
     else {
-      const revisionCount = await api.getRevisionsCount(query.padID).catch((err) => { if (err.name === 'apierror') return null; });
-      if (revisionCount) isPadIdValid = true;
-
-      if (isPadIdValid && isApiKeyValid) {
-        if ((!query.padID|| !query.wopiSrc || !query.accessToken || !query.apikey))
-          res.status(400).send(JSON.stringify({code:1,message:"Insufficient params or null values supplied as arguments!"}));
-        else {
-          dbInterface.addMetadataToPad(`${query.padID}`, `${(query.wopiSrc)}:${query.accessToken}`);
-          res.status(200).send(JSON.stringify({code:0,message:"Content set successfully in db"}));
-        }
-      }
-      else {
-        console.error('PadID is invalid');
-        res.status(400).send(JSON.stringify({code:1,message:"PadID is invalid"}));
-      }
+      console.error('PadID is invalid');
+      res.status(400).send(JSON.stringify({code:2, message:"Invalid PadID"}));
     }
   });
 };
