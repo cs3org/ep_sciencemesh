@@ -28,12 +28,14 @@ const fs = require('fs')
 const URL = require('url')
 const debounce = require('lodash')
 const axios = require('axios')
+const log4js = require('ep_etherpad-lite/node_modules/log4js')
 const api = require('ep_etherpad-lite/node/db/API')
 const absolutePaths = require('ep_etherpad-lite/node/utils/AbsolutePaths')
 const eejs = require('ep_etherpad-lite/node/eejs')
 const padMessageHandler = require('ep_etherpad-lite/node/handler/PadMessageHandler')
 const argv = require('ep_etherpad-lite/node/utils/Cli').argv
 
+const smLogger = log4js.getLogger('ScienceMesh')
 const dbInterface = require('./db_interface.js')
 
 // This is taken from ep_etherpad-lite/node/handler/APIHandler.js
@@ -41,8 +43,8 @@ let apikey = null
 const apikeyFn = absolutePaths.makeAbsolute(argv.apikey || './APIKEY.txt')
 try {
   apikey = fs.readFileSync(apikeyFn, 'utf8').trim()
-} catch (e) {
-  console.log(`Unable to read the API key from ${apikeyFn}: ${e}`)
+} catch (err) {
+  smLogger.error(`Unable to read the API key from ${apikeyFn}:`, JSON.stringify(err))
 }
 
 exports.eejsBlock_modals = (hookName, args, cb) => {
@@ -72,7 +74,7 @@ const getMetadata = async (context) => {
   // returns a (wopiHost, wopiSrc, accessToken) tuple
   const params = metadata.split(':')
   const wopiSrc = decodeURIComponent(params[0])
-  console.log(`URL for serving requests to the WOPI server: ${wopiSrc}`)
+  smLogger.debug(`WOPI server URL: ${wopiSrc}`)
   return [new URL(wopiSrc).origin, wopiSrc, params[1]]
 }
 
@@ -89,14 +91,14 @@ const wopiCall = async (wopiHost, wopiSrc, accessToken, padID, close = false) =>
   })
     .then((response) => {
       if (response.status === 202) {
-        console.log('wopiCall: enqueued action')
+        smLogger.debug('wopiCall: enqueued action')
       } else {
-        console.log('wopiCall: saved')
+        smLogger.debug('wopiCall: saved')
         notifyUser(padID, response.data)
       }
     })
     .catch((error) => {
-      console.log(`wopiCall: error from wopiserver ${error.statusText}: ${error.data.message}`)
+      smLogger.warn(`wopiCall: error ${error.statusText}: ${error.data.message}`)
       notifyUser(padID, error.data)
 
       if (error.status === 400 || error.status === 500) {
@@ -110,15 +112,15 @@ const wopiCall = async (wopiHost, wopiSrc, accessToken, padID, close = false) =>
 exports.setEFSSMetadata = async (hookName, context) => {
   context.app.post('/setEFSSMetadata', async (req, res) => {
     const query = req.query
-    console.log('Query from wopiserver:', JSON.stringify(query))
 
     if (query.apikey !== apikey) {
-      console.error('Supplied API key is invalid, apikey should be', apikey)
+      smLogger.warn('setEFSSMetadata: invalid API key')
       res.status(401).send(JSON.stringify({ code: 1, message: 'Invalid API key' }))
       return
     }
 
-    if (!query.wopiSrc || !query.accessToken) {
+    if (!query.wopiSrc || !query.accessToken || !query.padID) {
+      smLogger.warn('setEFSSMetadata: missing arguments in query parameters', JSON.stringify(query))
       res.status(400).send(JSON.stringify({ code: 1, message: 'Missing arguments' }))
       return
     }
@@ -129,23 +131,24 @@ exports.setEFSSMetadata = async (hookName, context) => {
     if (revisionCount) {
       try {
         dbInterface.addMetadataToPad(`${query.padID}`, `${(query.wopiSrc)}:${query.accessToken}`)
+        smLogger.info(`setEFSSMetadata: successfully added token ${query.accessToken} to ${query.padID}`)
         res.status(200).send(JSON.stringify({ code: 0, message: 'OK' }))
       } catch (err) {
-        console.error('Error setting metadata:', JSON.stringify(err))
-        res.status(500).send(JSON.stringify({ code: 3, message: 'Error setting metadata: ' + err }))
+        smLogger.error(`setEFSSMetadata: error setting metadata: ${err}`)
+        res.status(500).send(JSON.stringify({ code: 3, message: `Error setting metadata: ${err}` }))
       }
     } else {
-      console.error('PadID is invalid')
+      smLogger.warn(`setEFSSMetadata: invalid pad ID '${query.padID}'`)
       res.status(404).send(JSON.stringify({ code: 2, message: 'PadID invalid or not found' }))
     }
   })
 }
 
 exports.padUpdate = debounce((hookName, context) => {
-  console.log('Pad content was updated after 3000 ms')
+  smLogger.debug('Pad content was updated after 3000 ms')
 
   const metadata = getMetadata(context).catch((err) => {
-    console.error(err)
+    smLogger.error(`padUpdate: error getting metadata for pad ${context.pad.id}:`, JSON.stringify(err))
     notifyUser(context.pad.id, 'Error getting metadata for pad: ' + err)
   })
 
@@ -154,7 +157,7 @@ exports.padUpdate = debounce((hookName, context) => {
 }, 3000)
 
 exports.userJoin = async (hookName, { authorId, displayName, padId }) => {
-  console.log('Joining author, setting metadata')
+  smLogger.info(`Author ${authorId} joined pad ${padId}, setting metadata`)
   dbInterface.setAuthorForPad(padId, authorId)
 }
 
@@ -169,13 +172,13 @@ exports.userLeave = function (hookName, session, callback) {
   callback(new Promise(
     async (resolve, reject) => {
       const metadata = await getMetadata(param).catch((err) => {
-        reject(console.error(err))
+        reject(smLogger.error(`userLeave: error getting metadata for pad ${param.pad.id}:`, JSON.stringify(err)))
       })
 
       const [wopiHost, wopiSrc, accessToken] = metadata
       await wopiCall(wopiHost, wopiSrc, accessToken, session.padId, true)
       await dbInterface.removeAuthor(session.padId, session.author)
-      resolve(console.log('Exited author content removed successfully from db'))
+      resolve(smLogger.info(`userLeave: author ${session.author} left pad ${session.padId}`))
     }
   ))
 }
