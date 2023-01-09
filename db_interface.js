@@ -26,26 +26,26 @@ const mutex = require('async-mutex')
 
 const dbMutex = new mutex.Mutex()
 
-function addMetadataToPad (padId, metadata) {
-  const release = dbMutex.acquire()
+async function addMetadataToPad (padId, metadata) {
+  const release = await dbMutex.acquire()
   try {
-    const md = db.get(`efssmetadata:${padId}`)
+    const md = await db.get(`efssmetadata:${padId}`)
     if (md == null) {
       // first metadata payload for this pad
-      db.set(`efssmetadata:${padId}`, metadata)
+      await db.set(`efssmetadata:${padId}`, metadata)
     } else {
       // append another metadata payload
-      db.set(`efssmetadata:${padId}`, md + '_' + metadata)
+      await db.set(`efssmetadata:${padId}`, md + '_' + metadata)
     }
   } finally {
     release()
   }
 }
 
-function setAuthorForPad (padId, authorId) {
-  const release = dbMutex.acquire()
+async function setAuthorForPad (padId, authorId) {
+  const release = await dbMutex.acquire()
   try {
-    const pendingmd = db.get(`efssmetadata:${padId}`)
+    const pendingmd = await db.get(`efssmetadata:${padId}`)
     if (pendingmd == null) {
       // this may currently happen if a pad was created directly with Etherpad
       // TODO need to understand what happens with this uncaught error
@@ -54,32 +54,32 @@ function setAuthorForPad (padId, authorId) {
 
     if (pendingmd.indexOf('_') > 0) {
       // get first metadata payload for this author and keep the rest
-      db.set(`efssmetadata:${padId}:${authorId}`, pendingmd.substring(0, pendingmd.indexOf('_')))
-      db.set(`efssmetadata:${padId}`, pendingmd.substring(pendingmd.indexOf('_') + 1))
+      await db.set(`efssmetadata:${padId}:${authorId}`, pendingmd.substring(0, pendingmd.indexOf('_')))
+      await db.set(`efssmetadata:${padId}`, pendingmd.substring(pendingmd.indexOf('_') + 1))
     } else {
       // we found a single payload, use it and drop pending key
-      db.set(`efssmetadata:${padId}:${authorId}`, pendingmd)
-      db.remove(`efssmetadata:${padId}`)
+      await db.set(`efssmetadata:${padId}:${authorId}`, pendingmd)
+      await db.remove(`efssmetadata:${padId}`)
     }
   } finally {
     release()
   }
 }
 
-function getMetadata (padId, authorId) {
+async function getMetadata (padId, authorId) {
   // return required metadata, errors are thrown to the caller
-  const metadata = db.get(`efssmetadata:${padId}:${authorId}`)
+  const metadata = await db.get(`efssmetadata:${padId}:${authorId}`)
   if (metadata == null) {
     throw new Error(`Metadata not found for padId = ${padId} and authorId = ${authorId}`)
   }
   return metadata
 }
 
-function removeAuthor (padId, authorId) {
+async function removeAuthor (padId, authorId) {
   // the mutex is not strictly needed here but for consistency we keep it
-  const release = dbMutex.acquire()
+  const release = await dbMutex.acquire()
   try {
-    db.remove(`efssmetadata:${padId}:${authorId}`)
+    await db.remove(`efssmetadata:${padId}:${authorId}`)
   } finally {
     release()
   }

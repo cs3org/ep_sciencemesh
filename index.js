@@ -69,7 +69,7 @@ const notifyUser = (padID, message) => {
 }
 
 const getMetadata = async (context) => {
-  const metadata = dbInterface.getMetadata(`${context.pad.id}`, `${context.author}`)
+  const metadata = await dbInterface.getMetadata(`${context.pad.id}`, `${context.author}`)
 
   // returns a (wopiHost, wopiSrc, accessToken) tuple
   const params = metadata.split(':')
@@ -102,7 +102,7 @@ const wopiCall = async (wopiHost, wopiSrc, accessToken, padID, close = false) =>
       notifyUser(padID, error.data)
 
       if (error.status === 400 || error.status === 500) {
-      // TODO block further edit
+        // TODO block further edit
       }
     })
 }
@@ -169,7 +169,7 @@ exports.userLeave = function (hookName, session, callback) {
     }
   }
 
-  callback(new Promise(
+  callback(
     async (resolve, reject) => {
       const metadata = await getMetadata(param).catch((err) => {
         reject(smLogger.error(`userLeave: error getting metadata for pad ${param.pad.id}:`, JSON.stringify(err)))
@@ -180,5 +180,5 @@ exports.userLeave = function (hookName, session, callback) {
       await dbInterface.removeAuthor(session.padId, session.author)
       resolve(smLogger.info(`userLeave: author ${session.author} left pad ${session.padId}`))
     }
-  ))
+  )
 }
