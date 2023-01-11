@@ -157,7 +157,7 @@ exports.padUpdate = debounce((hookName, context) => {
 }, 3000)
 
 exports.userJoin = async (hookName, { authorId, displayName, padId }) => {
-  smLogger.info(`Author ${authorId} joined pad ${padId}, setting metadata`)
+  smLogger.info(`Author ${authorId} joined pad ${padId}, attempting to set metadata`)
   dbInterface.setAuthorForPad(padId, authorId)
 }
 

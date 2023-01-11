@@ -23,7 +23,9 @@
 
 const db = require('ep_etherpad-lite/node/db/DB')
 const mutex = require('async-mutex')
+const log4js = require('ep_etherpad-lite/node_modules/log4js')
 
+const smLogger = log4js.getLogger('ScienceMesh')
 const dbMutex = new mutex.Mutex()
 
 async function addMetadataToPad (padId, metadata) {
@@ -33,9 +35,11 @@ async function addMetadataToPad (padId, metadata) {
     if (md == null) {
       // first metadata payload for this pad
       await db.set(`efssmetadata:${padId}`, metadata)
+      smLogger.debug('addMetadataToPad: appended metadata')
     } else {
       // append another metadata payload
       await db.set(`efssmetadata:${padId}`, md + '_' + metadata)
+      smLogger.debug('addMetadataToPad: set metadata')
     }
   } finally {
     release()
@@ -49,6 +53,7 @@ async function setAuthorForPad (padId, authorId) {
     if (pendingmd == null) {
       // this may currently happen if a pad was created directly with Etherpad
       // TODO need to understand what happens with this uncaught error
+      smLogger.error('setAuthorForPad: no more pending metadata available')
       throw new Error('No outstanding metadata available to set a new author')
     }
 
@@ -56,10 +61,12 @@ async function setAuthorForPad (padId, authorId) {
       // get first metadata payload for this author and keep the rest
       await db.set(`efssmetadata:${padId}:${authorId}`, pendingmd.substring(0, pendingmd.indexOf('_')))
       await db.set(`efssmetadata:${padId}`, pendingmd.substring(pendingmd.indexOf('_') + 1))
+      smLogger.debug('setAuthorForPad: set metadata, more users may join')
     } else {
       // we found a single payload, use it and drop pending key
       await db.set(`efssmetadata:${padId}:${authorId}`, pendingmd)
       await db.remove(`efssmetadata:${padId}`)
+      smLogger.debug('setAuthorForPad: set metadata, no more pending metadata')
     }
   } finally {
     release()
@@ -80,6 +87,7 @@ async function removeAuthor (padId, authorId) {
   const release = await dbMutex.acquire()
   try {
     await db.remove(`efssmetadata:${padId}:${authorId}`)
+    smLogger.debug('removeAuthor: cleaned metadata')
   } finally {
     release()
   }
